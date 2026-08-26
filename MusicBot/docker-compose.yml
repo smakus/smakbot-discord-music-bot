@@ -1,0 +1,12 @@
+services:
+    musicbot:
+        image: smak/musicbot:latest
+        restart: unless-stopped
+        volumes:
+            - ./config:/musicbot/config
+            - ./musicbot_cache:/musicbot/audio_cache
+
+    bgutil-provider:
+        image: brainicism/bgutil-ytdlp-pot-provider
+        restart: unless-stopped
+        network_mode: "service:musicbot"

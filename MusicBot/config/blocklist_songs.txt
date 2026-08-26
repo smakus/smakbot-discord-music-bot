@@ -1,0 +1,6 @@
+# MusicBot discord song block list denies songs by URL or Title.
+# Add one URL or Title per line. Leading and trailing space is ignored.
+# This list is matched loosely, with case sensitivity, so adding 'press'
+# will block 'juice press' and 'press release' but not 'Press'
+# Block list entries will be tested against input and extraction info.
+# Lines starting with # are comments. All characters follow it are ignored.
