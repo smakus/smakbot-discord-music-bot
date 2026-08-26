@@ -1,5 +1,7 @@
 # smakbot
 
+Smakbot is a docker-based music bot that will join your discord audio channel and play music from a variety of sources.  Peruse the config files for all options, and read documentation from the original repo:  https://github.com/Just-Some-Bots/MusicBot
+
 ## Getting started
 
 1. Clone the repo
