@@ -7,6 +7,7 @@ Differences from upstream:
 - Debian-based image with [deno](https://deno.com) and the [bgutil PO token provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider), so yt-dlp can play YouTube without 403s.
 - Downloads audio-only streams (Opus, ~130 kbps) instead of 360p video, and falls back to the older YouTube clients if a download gets a 403.
 - Loudness normalization: every track gets one fixed gain to reach -14 LUFS (`UseLoudnessNormalization`, `LoudnessNormalizationTarget`). There's no compression, and boosts are capped so peaks never clip.
+- Cache size cap (`StorageLimitBytes = 3 GB`): over the cap, the cache is swept to 90%, deleting least-recently-played songs first. Each doubling of a song's play count keeps it 14 days longer (a play counts after 30 s). Playing, queued and newly downloaded songs are kept. Play stats live in `audio_cache/.cache_index.json`.
 - `!replay` (alias `!again`) plays the last finished or skipped song again, as the next song.
 - Settings that differ from upstream's examples:
   - `config/options.ini`:

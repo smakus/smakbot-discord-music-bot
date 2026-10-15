@@ -17,7 +17,7 @@ from discord import (
     VoiceClient,
 )
 
-from .constants import MUSICBOT_VOICE_MAX_KBITRATE
+from .constants import CACHE_MIN_PLAY_SECONDS, MUSICBOT_VOICE_MAX_KBITRATE
 from .constructs import Serializable, Serializer, SkipState
 from .entry import LocalFilePlaylistEntry, StreamPlaylistEntry, URLPlaylistEntry
 from .exceptions import FFmpegError, FFmpegWarning
@@ -292,6 +292,12 @@ class MusicPlayer(EventEmitter, Serializable):
             return
 
         self.last_entry = entry
+
+        # Smakbot: count the play for the cache sweep once enough was heard.
+        played = self.session_progress
+        duration = entry.duration or 0
+        if played >= min(CACHE_MIN_PLAY_SECONDS, duration * 0.9 or CACHE_MIN_PLAY_SECONDS):
+            self.bot.filecache.record_play(entry.filename)
 
         if self.repeatsong:
             self.playlist.entries.appendleft(entry)
