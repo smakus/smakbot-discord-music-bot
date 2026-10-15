@@ -143,10 +143,6 @@ class Downloader:
         # Copy immutable dict and use the mutable copy for everything else.
         ytdl_format_options = ytdl_format_options_immutable.copy()
         ytdl_format_options["http_headers"] = self.http_req_headers
-        # Smakbot: use a client combo that reliably avoids SABR-only 403s.
-        ytdl_format_options["extractor_args"] = {
-            "youtube": {"player_client": ["android", "ios", "web_safari"]}
-        }
 
         # Since yt-dlp version 2025.11.12, EJS and a js runtime are needed.
         # This should enable nodejs as a fallback to deno, if available.
