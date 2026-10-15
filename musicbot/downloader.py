@@ -88,6 +88,17 @@ ytdl_format_options_immutable = MappingProxyType(
     }
 )
 
+# Smakbot: if YouTube rejects a download with yt-dlp's default clients, retry
+# once with these clients. They avoid SABR-only 403s but only offer format 18
+# (360p video, ~48 kbps AAC), so they are a fallback rather than the default.
+YTDLP_FALLBACK_EXTRACTOR_ARGS = MappingProxyType(
+    {"youtube": {"player_client": ["android", "ios", "web_safari"]}}
+)
+YTDLP_FALLBACK_ERRORS = (
+    "HTTP Error 403",
+    "Requested format is not available",
+)
+
 
 def _ytdlp_bug_msg(*_args: Any, **_kwargs: Any) -> str:
     """
@@ -199,6 +210,12 @@ class Downloader:
         self.safe_ytdl = youtube_dl.YoutubeDL(
             {**ytdl_format_options, "ignoreerrors": True}
         )
+        self.fallback_ytdl = youtube_dl.YoutubeDL(
+            {
+                **ytdl_format_options,
+                "extractor_args": dict(YTDLP_FALLBACK_EXTRACTOR_ARGS),
+            }
+        )
 
     @property
     def ytdl(self) -> youtube_dl.YoutubeDL:
@@ -211,7 +228,8 @@ class Downloader:
         Get status of cookiefile option in ytdlp objects.
         """
         return all(
-            "cookiefile" in ytdl.params for ytdl in [self.safe_ytdl, self.unsafe_ytdl]
+            "cookiefile" in ytdl.params
+            for ytdl in [self.safe_ytdl, self.unsafe_ytdl, self.fallback_ytdl]
         )
 
     def enable_ytdl_cookies(self) -> None:
@@ -220,6 +238,7 @@ class Downloader:
         """
         self.safe_ytdl.params["cookiefile"] = self.bot.config.cookies_path
         self.unsafe_ytdl.params["cookiefile"] = self.bot.config.cookies_path
+        self.fallback_ytdl.params["cookiefile"] = self.bot.config.cookies_path
 
     def disable_ytdl_cookies(self) -> None:
         """
@@ -227,6 +246,7 @@ class Downloader:
         """
         del self.safe_ytdl.params["cookiefile"]
         del self.unsafe_ytdl.params["cookiefile"]
+        del self.fallback_ytdl.params["cookiefile"]
 
     def randomize_user_agent_string(self) -> None:
         """
@@ -240,6 +260,7 @@ class Downloader:
         new_ua = youtube_dl.utils.networking.random_user_agent()
         self.unsafe_ytdl.params["http_headers"]["User-Agent"] = new_ua
         self.safe_ytdl.params["http_headers"]["User-Agent"] = new_ua
+        self.fallback_ytdl.params["http_headers"]["User-Agent"] = new_ua
         self.http_req_headers["User-Agent"] = new_ua
 
     def get_url_or_none(self, url: str) -> Optional[str]:
@@ -528,12 +549,7 @@ class Downloader:
 
         # Actually call YoutubeDL extract_info.
         try:
-            data = await self.bot.loop.run_in_executor(
-                self.thread_pool,
-                functools.partial(
-                    self.unsafe_ytdl.extract_info, song_subject, *args, **kwargs
-                ),
-            )
+            data = await self._extract_with_fallback(song_subject, *args, **kwargs)
         except DownloadError as e:
             if not as_stream_url:
                 raise ExtractionError(
@@ -600,6 +616,43 @@ class Downloader:
                 data[key] = entry_info[key]
 
         return data
+
+    async def _extract_with_fallback(
+        self, song_subject: str, *args: Any, **kwargs: Any
+    ) -> Any:
+        """
+        Call extract_info on the unsafe YoutubeDL instance. If a YouTube
+        request fails with a 403 or an unavailable format, retry once with
+        the fallback clients, which play at lower quality.
+        """
+        try:
+            return await self.bot.loop.run_in_executor(
+                self.thread_pool,
+                functools.partial(
+                    self.unsafe_ytdl.extract_info, song_subject, *args, **kwargs
+                ),
+            )
+        except DownloadError as e:
+            subject = song_subject.lower()
+            is_youtube = (
+                "youtube.com" in subject
+                or "youtu.be" in subject
+                or subject.startswith("ytsearch")
+            )
+            if not is_youtube or not any(m in str(e) for m in YTDLP_FALLBACK_ERRORS):
+                raise
+            log.warning(
+                "YouTube rejected the default download, retrying with fallback "
+                "clients (lower quality). If this keeps happening, rebuild to "
+                "update yt-dlp.  Reason:  %s",
+                e,
+            )
+            return await self.bot.loop.run_in_executor(
+                self.thread_pool,
+                functools.partial(
+                    self.fallback_ytdl.extract_info, song_subject, *args, **kwargs
+                ),
+            )
 
     async def safe_extract_info(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         """
