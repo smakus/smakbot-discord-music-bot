@@ -35,7 +35,7 @@ Differences from upstream:
    docker compose up --build -d
    ```
 
-Leave `Token` blank in `config/options.ini`; the bot falls back to `MUSICBOT_TOKEN`.
+Leave `Token` blank in `config/options.ini`; the bot falls back to `MUSICBOT_TOKEN`. (Setting `Token` in `options.ini` still works and takes priority, but that file is tracked in git, so the token could be committed by accident.)
 
 The owner is detected automatically from the bot application (`OwnerID = 0`), and commands use the `!` prefix (for example `!play <song or URL>`, `!help`).
 
