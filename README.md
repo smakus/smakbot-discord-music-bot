@@ -5,11 +5,14 @@ Smakbot is a Docker-based music bot that joins your Discord voice channel and pl
 Differences from upstream:
 
 - Debian-based image with [deno](https://deno.com) and the [bgutil PO token provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider), so yt-dlp can play YouTube without 403s.
+- Downloads audio-only streams (Opus, ~130 kbps) instead of 360p video, and falls back to the older YouTube clients if a download gets a 403.
+- Loudness normalization: every track gets one fixed gain to reach -14 LUFS (`UseLoudnessNormalization`, `LoudnessNormalizationTarget`). There's no compression, and boosts are capped so peaks never clip.
 - Settings that differ from upstream's examples:
   - `config/options.ini`:
     - A single skip vote skips a song (`SkipsRequired = 1`, `SkipRatio = 0`).
     - The queue is not kept across restarts (`PersistentQueue = no`).
     - The autoplaylist is off (`UseAutoPlaylist = no`). If you turn it on, a song someone requests interrupts the current autoplaylist song (`AutoPlaylistAutoSkip = yes`).
+    - Default volume is 24% (`DefaultVolume = 0.24`).
     - The bot leaves an empty voice channel after 20 seconds (`LeaveInactiveVCTimeOut = 0:00:20`).
     - `BotExceptionIDs` lists one other bot, by ID, that the bot will respond to.
   - `config/permissions.ini`: no song length limit for regular users (`MaxSongLength = 0`).

@@ -573,6 +573,29 @@ class Config:
                 "This option can cause delay between playing songs, as the whole track must be processed."
             ),
         )
+        self.use_loudness_normalization: bool = self.register.init_option(
+            section="Playback",
+            option="UseLoudnessNormalization",
+            dest="use_loudness_normalization",
+            default=ConfigDefaults.use_loudness_normalization,
+            getter="getboolean",
+            comment=_Dd(
+                "Play every track at a similar loudness by applying one fixed gain per track.\n"
+                "Dynamics are not compressed, and gain is capped so peaks never clip.\n"
+                "Each file is measured once with ffmpeg and the result is cached."
+            ),
+        )
+        self.loudness_normalization_target: float = self.register.init_option(
+            section="Playback",
+            option="LoudnessNormalizationTarget",
+            dest="loudness_normalization_target",
+            default=ConfigDefaults.loudness_normalization_target,
+            getter="getfloat",
+            comment=_Dd(
+                "Target integrated loudness in LUFS for UseLoudnessNormalization.\n"
+                "-14 matches YouTube. Higher (e.g. -12) is louder, lower (e.g. -16) is quieter."
+            ),
+        )
         self.round_robin_queue: bool = self.register.init_option(
             section="Playback",
             option="RoundRobinQueue",
@@ -1554,6 +1577,8 @@ class ConfigDefaults:
     use_opus_audio: bool = True
     use_opus_probe: bool = False
     use_experimental_equalization: bool = False
+    use_loudness_normalization: bool = False
+    loudness_normalization_target: float = -14.0
     embeds: bool = True
     queue_length: int = 10
     remove_ap: bool = True

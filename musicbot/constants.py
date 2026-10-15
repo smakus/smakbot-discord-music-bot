@@ -71,6 +71,14 @@ DEFAULT_DATA_DIR: str = "data/"
 # File names within the DEFAULT_DATA_DIR or guild folders.
 DATA_FILE_SERVERS: str = "server_names.txt"
 DATA_FILE_CACHEMAP: str = "playlist_cachemap.json"
+# Smakbot: per-file loudness measurements, kept inside the audio cache folder.
+AUDIO_CACHE_LOUDNESS_FILE: str = ".loudness.json"
+# Loudness normalization never raises a track's true peak above this (dBTP).
+LOUDNESS_MAX_TRUE_PEAK: float = -1.5
+# ...and never changes a track's level by more than this many dB either way.
+LOUDNESS_MAX_GAIN_DB: float = 20.0
+# Only the first this-many seconds of a file are analysed for loudness.
+LOUDNESS_MAX_ANALYSIS_SECONDS: int = 600
 DATA_FILE_COOKIES: str = "cookies.txt"  # No support for this, go read yt-dlp docs.
 DATA_GUILD_FILE_QUEUE: str = "queue.json"
 DATA_GUILD_FILE_CUR_SONG: str = "current.txt"
