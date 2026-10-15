@@ -162,7 +162,8 @@ class MusicPlayer(EventEmitter, Serializable):
         self._volume = value
         if self._source:
             if isinstance(self._source._source, PCMVolumeTransformer):
-                self._source._source.volume = value
+                gain = getattr(self._current_entry, "loudness_gain", 1.0)
+                self._source._source.volume = value * gain
             # if isinstance(self._source._source, FFmpegOpusAudio):
 
     def on_entry_added(
@@ -416,7 +417,9 @@ class MusicPlayer(EventEmitter, Serializable):
                 aoptions = "-vn -sn -dn"  # "-b:a 192k"
                 if isinstance(entry, (URLPlaylistEntry, LocalFilePlaylistEntry)):
                     if self.bot.config.use_opus_audio:
-                        entry.set_audio_filter("volume", f"{self.volume:.2f}")
+                        entry.set_audio_filter(
+                            "volume", f"{self.volume * entry.loudness_gain:.4f}"
+                        )
                     # check for after-options, usually filters for speed and EQ.
                     if entry.aoptions and not self.bot.config.use_opus_probe:
                         aoptions += f" {entry.aoptions}"
@@ -473,7 +476,7 @@ class MusicPlayer(EventEmitter, Serializable):
                             options=aoptions,
                             stderr=stderr_io,
                         ),
-                        self.volume,
+                        self.volume * getattr(entry, "loudness_gain", 1.0),
                     )
 
                 self._source = SourcePlaybackCounter(

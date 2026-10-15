@@ -6,10 +6,14 @@ import os
 import pathlib
 import shutil
 import time
-from typing import TYPE_CHECKING, Dict, Tuple
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 from . import write_path
-from .constants import DATA_FILE_CACHEMAP, DEFAULT_DATA_DIR
+from .constants import (
+    AUDIO_CACHE_LOUDNESS_FILE,
+    DATA_FILE_CACHEMAP,
+    DEFAULT_DATA_DIR,
+)
 from .utils import format_size_from_bytes
 
 if TYPE_CHECKING:
@@ -37,6 +41,7 @@ class AudioFileCache:
 
         self.size_bytes: int = 0
         self.file_count: int = 0
+        self._loudness: Optional[Dict[str, Dict[str, float]]] = None
 
         # Stores filenames without extension associated to a playlist URL.
         self.auto_playlist_cachemap: Dict[str, str] = {}
@@ -50,6 +55,42 @@ class AudioFileCache:
     def folder(self) -> pathlib.Path:
         """Get the configured cache path as a pathlib.Path"""
         return self.cache_path
+
+    @property
+    def loudness_file(self) -> pathlib.Path:
+        """Path of the JSON file holding loudness measurements for cached files."""
+        return self.cache_path / AUDIO_CACHE_LOUDNESS_FILE
+
+    def get_loudness(self, filename: str) -> Optional[Dict[str, float]]:
+        """
+        Get the stored loudness measurement for a cached file, keyed by basename.
+        Returns a dict with 'i' (LUFS) and 'tp' (dBTP), or None if not measured.
+        """
+        if self._loudness is None:
+            self._loudness = {}
+            try:
+                with open(self.loudness_file, "r", encoding="utf8") as fh:
+                    self._loudness = json.load(fh)
+            except FileNotFoundError:
+                pass
+            except (OSError, ValueError):
+                log.warning("Could not read loudness data, files will be re-measured.")
+        return self._loudness.get(pathlib.Path(filename).name)
+
+    def set_loudness(self, filename: str, i_lufs: float, tp_dbtp: float) -> None:
+        """Store a loudness measurement for a cached file and save it to disk."""
+        if self._loudness is None:
+            self.get_loudness(filename)
+        assert self._loudness is not None
+        self._loudness[pathlib.Path(filename).name] = {"i": i_lufs, "tp": tp_dbtp}
+        try:
+            self.ensure_cache_dir_exists()
+            tmp = self.loudness_file.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf8") as fh:
+                json.dump(self._loudness, fh)
+            tmp.replace(self.loudness_file)
+        except OSError:
+            log.warning("Could not save loudness data.", exc_info=True)
 
     def get_if_cached(self, filename: str, ignore_ext: bool = True) -> str:
         """

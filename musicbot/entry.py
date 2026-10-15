@@ -12,6 +12,11 @@ from yt_dlp.utils import (  # type: ignore[import-untyped]
     YoutubeDLError,
 )
 
+from .constants import (
+    LOUDNESS_MAX_ANALYSIS_SECONDS,
+    LOUDNESS_MAX_GAIN_DB,
+    LOUDNESS_MAX_TRUE_PEAK,
+)
 from .constructs import Serializable
 from .downloader import YtdlpResponseDict
 from .exceptions import ExtractionError, InvalidDataError, MusicbotException
@@ -58,6 +63,8 @@ class BasePlaylistEntry(Serializable):
         self.cache_busted: bool = False
         self._is_downloading: bool = False
         self._is_downloaded: bool = False
+        # Smakbot: linear gain applied on top of player volume for loudness normalization.
+        self.loudness_gain: float = 1.0
         self._waiting_futures: List[AsyncFuture] = []
         self._task_pool: Set[AsyncTask] = set()
         self._probed_codec: Optional[str] = ""
@@ -199,6 +206,91 @@ class BasePlaylistEntry(Serializable):
             filters = ",".join(f"{f}={a}" for f, a in self._a_filters.items())
             return f"-af {filters}"
         return ""
+
+    async def set_loudness_gain(self) -> None:
+        """
+        Set `loudness_gain` so this file plays at the configured target loudness.
+        Uses one fixed gain for the whole track (no compression), capped so the
+        true peak stays at or below LOUDNESS_MAX_TRUE_PEAK. Measurements are cached.
+        """
+        self.loudness_gain = 1.0
+        if not self.filename:
+            return
+        bot = self.playlist.bot  # type: ignore[attr-defined]
+        try:
+            measured = bot.filecache.get_loudness(self.filename)
+            if measured is None:
+                measured = await measure_loudness(self.filename)
+                if measured is None:
+                    return
+                bot.filecache.set_loudness(self.filename, measured["i"], measured["tp"])
+
+            gain_db = bot.config.loudness_normalization_target - measured["i"]
+            if gain_db > 0:
+                # Only boosts are peak-limited; a track is never turned down
+                # below its original level just because its source peaks are hot.
+                headroom = max(0.0, LOUDNESS_MAX_TRUE_PEAK - measured["tp"])
+                gain_db = min(gain_db, headroom)
+            gain_db = max(-LOUDNESS_MAX_GAIN_DB, min(LOUDNESS_MAX_GAIN_DB, gain_db))
+            self.loudness_gain = 10 ** (gain_db / 20)
+            log.info(
+                "Loudness:  %(i).1f LUFS, peak %(tp).1f dBTP -> gain %(gain)+.1f dB for:  %(file)s",
+                {
+                    "i": measured["i"],
+                    "tp": measured["tp"],
+                    "gain": gain_db,
+                    "file": os.path.basename(self.filename),
+                },
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            log.error(
+                "Could not measure loudness, playing without normalization:  %s",
+                self.filename,
+                exc_info=True,
+            )
+
+
+async def measure_loudness(input_file: str) -> Optional[Dict[str, float]]:
+    """
+    Measure integrated loudness (LUFS) and true peak (dBTP) of `input_file`
+    with ffmpeg's ebur128 filter. Returns None if it could not be measured.
+    """
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if not ffmpeg_bin:
+        log.error("Could not locate ffmpeg on your path!")
+        return None
+    output = (
+        await run_command(
+            [
+                ffmpeg_bin,
+                "-hide_banner",
+                "-nostats",
+                "-i",
+                input_file,
+                "-vn",
+                # Long mixes and videos: the first 10 minutes are a good
+                # estimate, and keep playback from waiting on a full analysis.
+                "-t",
+                str(LOUDNESS_MAX_ANALYSIS_SECONDS),
+                "-af",
+                "ebur128=peak=true:framelog=quiet",
+                "-f",
+                "null",
+                "-",
+            ]
+        )
+    ).decode("utf8", errors="replace")
+    # Use the last match: the summary printed when the analysis finishes.
+    i_matches = re.findall(r"^\s+I:\s+(-?[0-9.]+) LUFS", output, re.MULTILINE)
+    tp_matches = re.findall(r"^\s+Peak:\s+(-?[0-9.]+) dBFS", output, re.MULTILINE)
+    if not i_matches or not tp_matches:
+        log.warning("No loudness data from ffmpeg for:  %s", input_file)
+        return None
+    i_lufs, tp_dbtp = float(i_matches[-1]), float(tp_matches[-1])
+    # silence or near-silence measures at the -70 LUFS gate; leave those alone.
+    if i_lufs <= -70:
+        return None
+    return {"i": i_lufs, "tp": tp_dbtp}
 
 
 async def run_command(command: List[str]) -> bytes:
@@ -543,6 +635,9 @@ class URLPlaylistEntry(BasePlaylistEntry):
                         "Got duration of %(time)s seconds for file:  %(file)s",
                         {"time": self.duration, "file": self.filename},
                     )
+
+            if self.playlist.bot.config.use_loudness_normalization:
+                await self.set_loudness_gain()
 
             if self.playlist.bot.config.use_experimental_equalization:
                 try:
@@ -1218,6 +1313,9 @@ class LocalFilePlaylistEntry(BasePlaylistEntry):
                         "Got duration of %(seconds)s seconds for file:  %(file)s",
                         {"seconds": self.duration, "file": self.filename},
                     )
+
+            if self.playlist.bot.config.use_loudness_normalization:
+                await self.set_loudness_gain()
 
             if self.playlist.bot.config.use_experimental_equalization:
                 try:
