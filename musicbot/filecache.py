@@ -13,6 +13,7 @@ from . import write_path
 from .constants import (
     AUDIO_CACHE_INDEX_FILE,
     AUDIO_CACHE_LOUDNESS_FILE,
+    AUDIO_CACHE_SEARCH_MEMORY_FILE,
     CACHE_NEW_FILE_GRACE_SECONDS,
     CACHE_PLAY_BONUS_DAYS,
     CACHE_SWEEP_TARGET_RATIO,
@@ -47,6 +48,7 @@ class AudioFileCache:
         self.size_bytes: int = 0
         self.file_count: int = 0
         self._index: Optional[Dict[str, Dict[str, float]]] = None
+        self._search_memory: Optional[Dict[str, Dict[str, Any]]] = None
 
         # Stores filenames without extension associated to a playlist URL.
         self.auto_playlist_cachemap: Dict[str, str] = {}
@@ -192,6 +194,75 @@ class AudioFileCache:
         entry = self._index_entry(filename)
         bonus_days = CACHE_PLAY_BONUS_DAYS * math.log2(max(1, int(entry["plays"])))
         return float(entry["last_played"]) + bonus_days * 86400
+
+    @staticmethod
+    def normalize_search(query: str) -> str:
+        """Normalize search text so trivial differences map to the same memory."""
+        return " ".join(query.lower().split())
+
+    def _load_search_memory(self) -> Dict[str, Dict[str, Any]]:
+        """Load remembered search results once."""
+        if self._search_memory is None:
+            self._search_memory = {}
+            try:
+                with open(
+                    self.cache_path / AUDIO_CACHE_SEARCH_MEMORY_FILE, "r", encoding="utf8"
+                ) as fh:
+                    self._search_memory = json.load(fh)
+            except FileNotFoundError:
+                pass
+            except (OSError, ValueError):
+                log.warning("Could not read search memory, it will be rebuilt.")
+        return self._search_memory
+
+    def recall_search(self, query: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the remembered video for a search, if it is still fresh (within
+        SearchMemoryDays) and its file is still in the cache.
+        """
+        days = self.config.search_memory_days
+        if not days or days < 0:
+            return None
+        found = self._load_search_memory().get(self.normalize_search(query))
+        if not found:
+            return None
+        if time.time() - float(found.get("resolved", 0)) > days * 86400:
+            return None
+        if not self.get_youtube_cached(str(found.get("id", ""))):
+            return None
+        return found
+
+    def remember_search(
+        self, query: str, video_id: str, title: str, duration: Any, url: str
+    ) -> None:
+        """
+        Remember which video a search resolved to, and drop expired memories.
+        (Memories whose file was swept are ignored by recall_search and get
+        replaced on the next real search.)
+        """
+        days = self.config.search_memory_days
+        if not days or days < 0 or not video_id:
+            return
+        memory = self._load_search_memory()
+        memory[self.normalize_search(query)] = {
+            "id": video_id,
+            "title": title,
+            "duration": duration,
+            "url": url,
+            "resolved": time.time(),
+        }
+        cutoff = time.time() - days * 86400
+        for key in [k for k, v in memory.items() if float(v.get("resolved", 0)) < cutoff]:
+            memory.pop(key)
+        try:
+            self.ensure_cache_dir_exists()
+            path = self.cache_path / AUDIO_CACHE_SEARCH_MEMORY_FILE
+            tmp = path.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf8") as fh:
+                json.dump(memory, fh)
+            tmp.replace(path)
+        except OSError:
+            log.warning("Could not save search memory.", exc_info=True)
 
     def get_youtube_cached(self, video_id: str) -> str:
         """

@@ -75,6 +75,8 @@ DATA_FILE_CACHEMAP: str = "playlist_cachemap.json"
 # audio cache folder. The older loudness-only file is migrated into it.
 AUDIO_CACHE_INDEX_FILE: str = ".cache_index.json"
 AUDIO_CACHE_LOUDNESS_FILE: str = ".loudness.json"
+# Smakbot: remembered search -> video results, kept inside the audio cache folder.
+AUDIO_CACHE_SEARCH_MEMORY_FILE: str = ".search_memory.json"
 # Cache sweep: when StorageLimitBytes is exceeded, delete down to this share of it.
 CACHE_SWEEP_TARGET_RATIO: float = 0.9
 # Each doubling of a file's play count keeps it this many days longer.
