@@ -10,6 +10,7 @@ Differences from upstream:
 - Cache size cap (`StorageLimitBytes = 3 GB`): over the cap, the cache is swept to 90%, deleting least-recently-played songs first. Each doubling of a song's play count keeps it 14 days longer (a play counts after 30 s). Playing, queued and newly downloaded songs are kept. Play stats live in `audio_cache/.cache_index.json`.
 - `!replay` (alias `!again`) plays the last finished or skipped song again, as the next song.
 - `!playtop [COUNT]` (aliases `!top`, `!mostplayed`) queues the most played cached songs, 10 by default, straight from disk.
+- Search memory (`SearchMemoryDays = 30`): repeating a YouTube search plays the same cached song without asking YouTube. `!fresh <search>` forces a new search and replaces the remembered result.
 - Settings that differ from upstream's examples:
   - `config/options.ini`:
     - A single skip vote skips a song (`SkipsRequired = 1`, `SkipRatio = 0`).

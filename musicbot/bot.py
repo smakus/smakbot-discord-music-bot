@@ -3848,6 +3848,42 @@ class MusicBot(discord.Client):
         )
 
     @command_helper(
+        usage=["{cmd} <SEARCH>"],
+        desc=_Dd(
+            "Like the play command, but always searches YouTube instead of reusing a remembered result.\n"
+            "The new result replaces what the bot remembers for that search.\n"
+        ),
+    )
+    async def cmd_fresh(
+        self,
+        message: discord.Message,
+        player: MusicPlayer,
+        channel: GuildMessageableChannels,
+        guild: discord.Guild,
+        author: discord.Member,
+        permissions: PermissionGroup,
+        leftover_args: List[str],
+        song_url: str,
+    ) -> CommandResponse:
+        """
+        Play a search with a fresh YouTube lookup, updating the search memory.
+        """
+        await self._do_cmd_unpause_check(player, channel, author, message)
+
+        return await self._cmd_play(
+            message,
+            player,
+            channel,
+            guild,
+            author,
+            permissions,
+            leftover_args,
+            song_url,
+            head=False,
+            fresh_search=True,
+        )
+
+    @command_helper(
         usage=["{cmd} [URL]"],
         desc=_Dd(
             "Play command that shuffles playlist entries before adding them to the queue.\n"
@@ -4440,6 +4476,7 @@ class MusicBot(discord.Client):
         shuffle_entries: bool = False,
         ignore_video_id: str = "",
         skip_playing: bool = False,
+        fresh_search: bool = False,
     ) -> CommandResponse:
         """
         This function handles actually adding any given URL or song subject to
@@ -4452,6 +4489,8 @@ class MusicBot(discord.Client):
         """
         ssd_ = self.server_data[guild.id]
         await channel.typing()
+        # Smakbot: plain search text, set only for YouTube searches (search memory).
+        search_text = ""
 
         if not self.config.enable_local_media and song_url.lower().startswith(
             "file://"
@@ -4493,6 +4532,8 @@ class MusicBot(discord.Client):
                 self.config.enable_local_media
                 and song_url.lower().startswith("file://")
             ):
+                if self.config.default_search_service == "ytsearch":
+                    search_text = song_url
                 song_url = f"{self.config.default_search_service}:{song_url}"
 
             self._do_song_blocklist_check(song_url)
@@ -4527,10 +4568,41 @@ class MusicBot(discord.Client):
 
             # Get processed info from ytdlp
             info = None
+            # Smakbot: a repeated YouTube search plays the remembered, cached video.
+            remembered = None
+            if search_text and not fresh_search:
+                remembered = self.filecache.recall_search(search_text)
             try:
-                info = await self.downloader.extract_info(
-                    song_url, download=False, process=True
-                )
+                if remembered:
+                    log.info(
+                        "Search memory:  %(query)s  ->  %(title)s",
+                        {"query": search_text, "title": remembered["title"]},
+                    )
+                    vid = remembered["id"]
+                    info = downloader.YtdlpResponseDict(
+                        {
+                            "__input_subject": song_url,
+                            "__header_data": None,
+                            # not a real file: sends the entry to the cache lookup by ID.
+                            "__expected_filename": f"search-memory-{vid}",
+                            "_type": "url",
+                            "ie_key": "Youtube",
+                            "id": vid,
+                            "url": remembered["url"]
+                            or f"https://www.youtube.com/watch?v={vid}",
+                            "webpage_url": remembered["url"]
+                            or f"https://www.youtube.com/watch?v={vid}",
+                            "title": remembered["title"],
+                            "duration": remembered["duration"],
+                            "extractor": "youtube:search",
+                            "extractor_key": "YoutubeSearch",
+                            "thumbnail": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+                        }
+                    )
+                else:
+                    info = await self.downloader.extract_info(
+                        song_url, download=False, process=True
+                    )
             except Exception as e:
                 # TODO: i18n for translated exceptions.
                 info = None
@@ -4545,6 +4617,15 @@ class MusicBot(discord.Client):
             if not info:
                 raise exceptions.CommandError(
                     "That video cannot be played. Try using the stream command.",
+                )
+
+            if search_text and not remembered and info.get("ie_key") == "Youtube":
+                self.filecache.remember_search(
+                    search_text,
+                    info.video_id,
+                    info.title,
+                    info.get("duration"),
+                    info.get("url") or info.get("webpage_url") or "",
                 )
 
             # ensure the extractor has been allowed via permissions.

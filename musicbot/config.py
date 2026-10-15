@@ -596,6 +596,18 @@ class Config:
                 "-14 matches YouTube. Higher (e.g. -12) is louder, lower (e.g. -16) is quieter."
             ),
         )
+        self.search_memory_days: int = self.register.init_option(
+            section="Playback",
+            option="SearchMemoryDays",
+            dest="search_memory_days",
+            default=ConfigDefaults.search_memory_days,
+            getter="getint",
+            comment=_Dd(
+                "Remember which video a YouTube search played, for this many days.\n"
+                "Repeating the same search then plays the cached song without asking YouTube.\n"
+                "Use the fresh command to force a new search. Set to 0 to disable."
+            ),
+        )
         self.round_robin_queue: bool = self.register.init_option(
             section="Playback",
             option="RoundRobinQueue",
@@ -1579,6 +1591,7 @@ class ConfigDefaults:
     use_experimental_equalization: bool = False
     use_loudness_normalization: bool = False
     loudness_normalization_target: float = -14.0
+    search_memory_days: int = 30
     embeds: bool = True
     queue_length: int = 10
     remove_ap: bool = True
