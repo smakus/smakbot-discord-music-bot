@@ -27,5 +27,6 @@
     "summon": ["join", "connect", "come"],
     "disconnect": ["leave", "stop"],
     "resume": ["unpause", "continue"],
-    "replay": ["again"]
+    "replay": ["again"],
+    "playtop": ["top", "mostplayed"]
 }
