@@ -4072,6 +4072,51 @@ class MusicBot(discord.Client):
         )
 
     @command_helper(
+        usage=["{cmd}"],
+        desc=_Dd(
+            "Play the last song again, as the next song in the queue.\n"
+            "Replays the most recently finished or skipped song, or the current song if none has finished yet.\n"
+        ),
+    )
+    async def cmd_replay(
+        self,
+        ssd_: Optional[GuildSpecificData],
+        message: discord.Message,
+        player: MusicPlayer,
+        channel: GuildMessageableChannels,
+        author: discord.Member,
+    ) -> CommandResponse:
+        """
+        Re-queue the last finished (or current) song at the front of the queue.
+        """
+        entry = player.last_entry or player.current_entry
+        if entry is None:
+            raise exceptions.CommandError(
+                "Nothing has played yet, so there is nothing to replay.",
+            )
+
+        await self._do_cmd_unpause_check(player, channel, author, message)
+
+        # Re-use the stored info: no new YouTube lookup, and the cached file is reused.
+        if isinstance(entry, StreamPlaylistEntry):
+            await player.playlist.add_stream_from_info(
+                entry.info, channel=channel, author=author, head=True
+            )
+        else:
+            await player.playlist.add_entry_from_info(
+                entry.info, channel=channel, author=author, head=True
+            )
+
+        # Like the play command, start playback if the player was stopped.
+        if player.is_stopped:
+            player.play()
+            reply = _D("Replaying `%(title)s` now.", ssd_)
+        else:
+            reply = _D("Replaying `%(title)s` next.", ssd_)
+
+        return Response(reply % {"title": entry.title})
+
+    @command_helper(
         usage=["{cmd} [all | song | playlist | on | off]"],
         desc=_Dd(
             "Toggles playlist or song looping.\n"
