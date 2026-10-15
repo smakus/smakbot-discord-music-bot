@@ -141,6 +141,8 @@ class MusicPlayer(EventEmitter, Serializable):
         self._play_lock = asyncio.Lock()
         self._current_player: Optional[VoiceClient] = None
         self._current_entry: Optional[EntryTypes] = None
+        # Smakbot: the most recent entry that finished or was skipped, for !replay.
+        self.last_entry: Optional[EntryTypes] = None
         self._stderr_future: Optional[AsyncFuture] = None
 
         self._source: Optional[SourcePlaybackCounter] = None
@@ -288,6 +290,8 @@ class MusicPlayer(EventEmitter, Serializable):
         if entry is None:
             log.debug("Playback finished, but _current_entry is None.")
             return
+
+        self.last_entry = entry
 
         if self.repeatsong:
             self.playlist.entries.appendleft(entry)
