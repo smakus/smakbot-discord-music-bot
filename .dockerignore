@@ -1,5 +1,6 @@
 # Runtime
 audio_cache/
+musicbot_cache/
 bin/
 data/
 logs/
@@ -18,3 +19,7 @@ Dockerfile
 # IDE
 .idea/
 .vscode/
+# Secrets / local files
+.env
+.DS_Store
+**/.DS_Store

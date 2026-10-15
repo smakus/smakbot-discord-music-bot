@@ -1,0 +1,16 @@
+services:
+    musicbot:
+        build: .
+        image: smak/musicbot:latest
+        restart: unless-stopped
+        env_file:
+            - path: .env
+              required: false
+        volumes:
+            - ./config:/musicbot/config
+            - ./musicbot_cache:/musicbot/audio_cache
+
+    bgutil-provider:
+        image: brainicism/bgutil-ytdlp-pot-provider
+        restart: unless-stopped
+        network_mode: "service:musicbot"

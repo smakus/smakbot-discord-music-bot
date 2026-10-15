@@ -1,29 +1,39 @@
-# MusicBot
+# smakbot
 
-[![GitHub stars](https://img.shields.io/github/stars/Just-Some-Bots/MusicBot.svg)](https://github.com/Just-Some-Bots/MusicBot/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/Just-Some-Bots/MusicBot.svg)](https://github.com/Just-Some-Bots/MusicBot/network)
-[![Python version](https://img.shields.io/badge/python-3.10%20to%203.13-blue.svg)](https://python.org)
-[![Translations: 66.2%](https://img.shields.io/badge/Translations-66.2%25-yellow)](./i18n/readme.md)
-[![Discord](https://discordapp.com/api/guilds/129489631539494912/widget.png?style=shield)](https://discord.gg/bots)  
+Smakbot is a Docker-based music bot that joins your Discord voice channel and plays music from a variety of sources. It is derived from [Just-Some-Bots/MusicBot](https://github.com/Just-Some-Bots/MusicBot); see that project's documentation for every config option.
 
+Differences from upstream:
 
-MusicBot is the original Discord music bot written for [Python](https://www.python.org "Python homepage") 3.10 to 3.13, using the [discord.py](https://github.com/Rapptz/discord.py) library. It plays requested songs from YouTube and other services into a Discord server (or multiple servers). If the queue is empty, MusicBot will play a list of existing songs that is configurable. The bot features a permission system, allowing owners to restrict commands to certain people. MusicBot is capable of streaming live media into a voice channel.
+- Debian-based image with [deno](https://deno.com) and the [bgutil PO token provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider), so yt-dlp can play YouTube without 403s.
+- Tuned defaults in `config/options.ini` (lower skip requirements, persistent queue, autoplaylist on, etc.).
 
-![Main](https://i.imgur.com/FWcHtcS.png)
+## Getting started
 
-## Setup
-Setting up the MusicBot is relatively painless - just follow one of the [guides](https://just-some-bots.github.io/MusicBot/). After that, configure the bot to ensure its connection to Discord.
+1. Clone the repo
 
-The main configuration file is `config/options.ini`, but it is not included by default. Simply make a copy of `example_options.ini` and rename it to `options.ini`. See [`example_options.ini`](./config/example_options.ini) for more information about configurations.
+   ```bash
+   git clone https://github.com/smakus/smakbot-discord-music-bot.git
+   cd smakbot-discord-music-bot
+   ```
 
-### Commands
+2. Set your bot token in a `.env` file (git-ignored, never baked into the image)
 
-There are many commands that can be used with the bot. Most notably, the `play <url>` command (preceded by your command prefix), which will download, process, and play a song from YouTube or a similar site. A full list of commands is available [here](https://just-some-bots.github.io/MusicBot/using/commands/ "Commands").
+   ```bash
+   echo "MUSICBOT_TOKEN=your-discord-bot-token-here" > .env
+   ```
 
-### Further reading
+3. Build and run
 
-* [Docs & Guides](https://just-some-bots.github.io/MusicBot/)
-* [About Translations](./i18n/readme.md)
-* [Support Discord server](https://discord.gg/bots)
-* [Project license](LICENSE)
+   ```bash
+   docker compose up --build -d
+   ```
 
+Leave `Token` blank in `config/options.ini`; the bot falls back to `MUSICBOT_TOKEN`.
+
+## Pulling in upstream fixes
+
+```bash
+git remote add upstream https://github.com/Just-Some-Bots/MusicBot.git
+git fetch upstream
+git merge upstream/dev
+```

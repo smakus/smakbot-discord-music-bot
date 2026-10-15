@@ -1,0 +1,5 @@
+# MusicBot discord user block list denies all access to bot.
+# Add one User ID or username per each line.
+# Nick-names or server-profile names are not checked.
+# User ID is prefered. Usernames with discriminators (ex: User#1234) may not work.
+# In this file '#' is a comment character. All characters following it are ignored.
