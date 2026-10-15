@@ -609,6 +609,20 @@ class URLPlaylistEntry(BasePlaylistEntry):
                         self.filename = file_cache_path
                         self._is_downloaded = True
 
+                # Smakbot: search and playlist results only know the video ID
+                # until a full extraction, so look the file up by ID first.
+                elif self.info.get("ie_key") == "Youtube" and (
+                    cached_by_id := self.filecache.get_youtube_cached(
+                        self.info.video_id
+                    )
+                ):
+                    log.info(
+                        "Playing from cache by video ID:  %s",
+                        os.path.basename(cached_by_id),
+                    )
+                    self.filename = cached_by_id
+                    self._is_downloaded = True
+
                 # nothing cached, time to download for real.
                 else:
                     await self._really_download()

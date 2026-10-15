@@ -92,6 +92,27 @@ class AudioFileCache:
         except OSError:
             log.warning("Could not save loudness data.", exc_info=True)
 
+    def get_youtube_cached(self, video_id: str) -> str:
+        """
+        Find a cached YouTube file by video ID alone, for search and playlist
+        results whose expected filename isn't known until full extraction.
+        Prefers audio-only files over the 403 fallback's .mp4, and ignores
+        unfinished downloads.
+
+        :returns: a path string or empty string if not found.
+        """
+        if not video_id:
+            return ""
+        matches = [
+            item
+            for item in self.cache_path.glob(f"youtube-{glob.escape(video_id)}-*")
+            if item.is_file() and item.suffix not in (".part", ".ytdl", ".tmp")
+        ]
+        if not matches:
+            return ""
+        matches.sort(key=lambda item: item.suffix == ".mp4")
+        return str(matches[0])
+
     def get_if_cached(self, filename: str, ignore_ext: bool = True) -> str:
         """
         Check for an existing cache file by the given name, and return the matched path.
