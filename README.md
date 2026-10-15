@@ -5,7 +5,14 @@ Smakbot is a Docker-based music bot that joins your Discord voice channel and pl
 Differences from upstream:
 
 - Debian-based image with [deno](https://deno.com) and the [bgutil PO token provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider), so yt-dlp can play YouTube without 403s.
-- Tuned defaults in `config/options.ini` (lower skip requirements, persistent queue, autoplaylist on, etc.).
+- Settings that differ from upstream's examples:
+  - `config/options.ini`:
+    - A single skip vote skips a song (`SkipsRequired = 1`, `SkipRatio = 0`).
+    - The queue is not kept across restarts (`PersistentQueue = no`).
+    - The autoplaylist is off (`UseAutoPlaylist = no`). If you turn it on, a song someone requests interrupts the current autoplaylist song (`AutoPlaylistAutoSkip = yes`).
+    - The bot leaves an empty voice channel after 20 seconds (`LeaveInactiveVCTimeOut = 0:00:20`).
+    - `BotExceptionIDs` lists one other bot, by ID, that the bot will respond to.
+  - `config/permissions.ini`: no song length limit for regular users (`MaxSongLength = 0`).
 
 ## Getting started
 
@@ -29,6 +36,8 @@ Differences from upstream:
    ```
 
 Leave `Token` blank in `config/options.ini`; the bot falls back to `MUSICBOT_TOKEN`.
+
+The owner is detected automatically from the bot application (`OwnerID = 0`), and commands use the `!` prefix (for example `!play <song or URL>`, `!help`).
 
 ## Pulling in upstream fixes
 
