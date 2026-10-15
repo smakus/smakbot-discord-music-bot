@@ -71,8 +71,18 @@ DEFAULT_DATA_DIR: str = "data/"
 # File names within the DEFAULT_DATA_DIR or guild folders.
 DATA_FILE_SERVERS: str = "server_names.txt"
 DATA_FILE_CACHEMAP: str = "playlist_cachemap.json"
-# Smakbot: per-file loudness measurements, kept inside the audio cache folder.
+# Smakbot: per-file cache index (play stats and loudness), kept inside the
+# audio cache folder. The older loudness-only file is migrated into it.
+AUDIO_CACHE_INDEX_FILE: str = ".cache_index.json"
 AUDIO_CACHE_LOUDNESS_FILE: str = ".loudness.json"
+# Cache sweep: when StorageLimitBytes is exceeded, delete down to this share of it.
+CACHE_SWEEP_TARGET_RATIO: float = 0.9
+# Each doubling of a file's play count keeps it this many days longer.
+CACHE_PLAY_BONUS_DAYS: float = 14.0
+# A play only counts once this many seconds have been heard.
+CACHE_MIN_PLAY_SECONDS: float = 30.0
+# Never sweep a file downloaded this recently that hasn't been played yet.
+CACHE_NEW_FILE_GRACE_SECONDS: float = 3600.0
 # Loudness normalization never raises a track's true peak above this (dBTP).
 LOUDNESS_MAX_TRUE_PEAK: float = -1.5
 # ...and never changes a track's level by more than this many dB either way.

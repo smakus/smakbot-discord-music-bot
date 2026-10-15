@@ -2,6 +2,7 @@ import asyncio
 import glob
 import json
 import logging
+import math
 import os
 import pathlib
 import shutil
@@ -10,7 +11,11 @@ from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 from . import write_path
 from .constants import (
+    AUDIO_CACHE_INDEX_FILE,
     AUDIO_CACHE_LOUDNESS_FILE,
+    CACHE_NEW_FILE_GRACE_SECONDS,
+    CACHE_PLAY_BONUS_DAYS,
+    CACHE_SWEEP_TARGET_RATIO,
     DATA_FILE_CACHEMAP,
     DEFAULT_DATA_DIR,
 )
@@ -41,7 +46,7 @@ class AudioFileCache:
 
         self.size_bytes: int = 0
         self.file_count: int = 0
-        self._loudness: Optional[Dict[str, Dict[str, float]]] = None
+        self._index: Optional[Dict[str, Dict[str, float]]] = None
 
         # Stores filenames without extension associated to a playlist URL.
         self.auto_playlist_cachemap: Dict[str, str] = {}
@@ -57,40 +62,98 @@ class AudioFileCache:
         return self.cache_path
 
     @property
-    def loudness_file(self) -> pathlib.Path:
-        """Path of the JSON file holding loudness measurements for cached files."""
-        return self.cache_path / AUDIO_CACHE_LOUDNESS_FILE
+    def index_file(self) -> pathlib.Path:
+        """Path of the JSON index holding play stats and loudness for cached files."""
+        return self.cache_path / AUDIO_CACHE_INDEX_FILE
+
+    def _load_index(self) -> Dict[str, Dict[str, float]]:
+        """Load the cache index once, migrating the older loudness-only file."""
+        if self._index is not None:
+            return self._index
+        self._index = {}
+        for path in (self.cache_path / AUDIO_CACHE_LOUDNESS_FILE, self.index_file):
+            try:
+                with open(path, "r", encoding="utf8") as fh:
+                    for name, data in json.load(fh).items():
+                        self._index.setdefault(name, {}).update(data)
+            except FileNotFoundError:
+                pass
+            except (OSError, ValueError):
+                log.warning("Could not read cache index file:  %s", path)
+        # make sure every cached file has play stats, so the index is complete.
+        if self.cache_path.is_dir():
+            for item in self.cache_path.iterdir():
+                if (
+                    item.is_file()
+                    and not item.name.startswith(".")
+                    and item.suffix not in (".part", ".ytdl", ".tmp")
+                ):
+                    self._index_entry(item.name)
+        return self._index
+
+    def _save_index(self) -> None:
+        """Write the cache index to disk, and retire the older loudness file."""
+        index = self._load_index()
+        try:
+            self.ensure_cache_dir_exists()
+            tmp = self.index_file.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf8") as fh:
+                json.dump(index, fh)
+            tmp.replace(self.index_file)
+            (self.cache_path / AUDIO_CACHE_LOUDNESS_FILE).unlink(missing_ok=True)
+        except OSError:
+            log.warning("Could not save the cache index.", exc_info=True)
+
+    def _index_entry(self, filename: str) -> Dict[str, float]:
+        """
+        Get (creating if needed) the index entry for a cached file, filling in
+        play stats it doesn't have yet from the file itself.
+        """
+        path = self.cache_path / pathlib.Path(filename).name
+        entry = self._load_index().setdefault(path.name, {})
+        if "created" not in entry:
+            try:
+                entry["created"] = os.stat(path).st_ctime
+            except OSError:
+                entry["created"] = time.time()
+        entry.setdefault("last_played", entry["created"])
+        entry.setdefault("plays", 0)
+        return entry
 
     def get_loudness(self, filename: str) -> Optional[Dict[str, float]]:
         """
         Get the stored loudness measurement for a cached file, keyed by basename.
         Returns a dict with 'i' (LUFS) and 'tp' (dBTP), or None if not measured.
         """
-        if self._loudness is None:
-            self._loudness = {}
-            try:
-                with open(self.loudness_file, "r", encoding="utf8") as fh:
-                    self._loudness = json.load(fh)
-            except FileNotFoundError:
-                pass
-            except (OSError, ValueError):
-                log.warning("Could not read loudness data, files will be re-measured.")
-        return self._loudness.get(pathlib.Path(filename).name)
+        entry = self._load_index().get(pathlib.Path(filename).name, {})
+        if "i" in entry and "tp" in entry:
+            return {"i": entry["i"], "tp": entry["tp"]}
+        return None
 
     def set_loudness(self, filename: str, i_lufs: float, tp_dbtp: float) -> None:
-        """Store a loudness measurement for a cached file and save it to disk."""
-        if self._loudness is None:
-            self.get_loudness(filename)
-        assert self._loudness is not None
-        self._loudness[pathlib.Path(filename).name] = {"i": i_lufs, "tp": tp_dbtp}
-        try:
-            self.ensure_cache_dir_exists()
-            tmp = self.loudness_file.with_suffix(".tmp")
-            with open(tmp, "w", encoding="utf8") as fh:
-                json.dump(self._loudness, fh)
-            tmp.replace(self.loudness_file)
-        except OSError:
-            log.warning("Could not save loudness data.", exc_info=True)
+        """Store a loudness measurement for a cached file and save the index."""
+        entry = self._index_entry(filename)
+        entry["i"] = i_lufs
+        entry["tp"] = tp_dbtp
+        self._save_index()
+
+    def record_play(self, filename: str) -> None:
+        """Count a play of a cached file and mark it as played now."""
+        if not filename or not (self.cache_path / pathlib.Path(filename).name).is_file():
+            return
+        entry = self._index_entry(filename)
+        entry["plays"] = int(entry["plays"]) + 1
+        entry["last_played"] = time.time()
+        self._save_index()
+
+    def keep_until(self, filename: str) -> float:
+        """
+        Timestamp used to order the cache sweep: the last play, plus a bonus of
+        CACHE_PLAY_BONUS_DAYS for every doubling of the play count.
+        """
+        entry = self._index_entry(filename)
+        bonus_days = CACHE_PLAY_BONUS_DAYS * math.log2(max(1, int(entry["plays"])))
+        return float(entry["last_played"]) + bonus_days * 86400
 
     def get_youtube_cached(self, video_id: str) -> str:
         """
@@ -207,6 +270,95 @@ class AudioFileCache:
                 log.debug("Audio cache directory could not be removed.")
                 return False
 
+    def _protected_filenames(self) -> set:
+        """Basenames of files that are playing or queued in any player."""
+        names = set()
+        for player in getattr(self.bot, "players", {}).values():
+            entries = list(player.playlist.entries)
+            if player.current_entry:
+                entries.append(player.current_entry)
+            for entry in entries:
+                for name in (
+                    getattr(entry, "filename", ""),
+                    getattr(entry, "expected_filename", ""),
+                ):
+                    if name:
+                        names.add(pathlib.Path(name).name)
+        return names
+
+    def _sweep_by_score(self) -> bool:
+        """
+        Smakbot: when the cache is over StorageLimitBytes, delete files in order
+        of `keep_until` (last play, plus a bonus for play count) until it is at
+        CACHE_SWEEP_TARGET_RATIO of the limit. Files playing or queued, recent
+        unplayed downloads, and retained autoplaylist files are never deleted.
+        """
+        limit = self.config.storage_limit_bytes
+        files = [
+            item
+            for item in self.cache_path.iterdir()
+            if item.is_file()
+            and not item.name.startswith(".")
+            and item.suffix not in (".part", ".ytdl", ".tmp")
+        ]
+        total = sum(os.path.getsize(item) for item in files)
+        if total <= limit:
+            self.scan_audio_cache()
+            return True
+
+        target = int(limit * CACHE_SWEEP_TARGET_RATIO)
+        protected = self._protected_filenames()
+        now = time.time()
+        candidates = []
+        for item in files:
+            entry = self._index_entry(item.name)
+            if item.name in protected or self._check_autoplay_cachemap(item):
+                continue
+            if not entry["plays"] and now - entry["created"] < CACHE_NEW_FILE_GRACE_SECONDS:
+                continue
+            candidates.append((self.keep_until(item.name), item, entry))
+        candidates.sort(key=lambda c: c[0])
+
+        removed_count = 0
+        removed_size = 0
+        for keep, item, entry in candidates:
+            if total <= target:
+                break
+            size = os.path.getsize(item)
+            if not self._delete_cache_file(item):
+                continue
+            total -= size
+            removed_count += 1
+            removed_size += size
+            self._load_index().pop(item.name, None)
+            log.info(
+                "Cache sweep removed:  %(name)s  (%(plays)d plays, last %(last)s, kept until %(keep)s)",
+                {
+                    "name": item.name,
+                    "plays": int(entry["plays"]),
+                    "last": time.strftime("%Y-%m-%d", time.localtime(entry["last_played"])),
+                    "keep": time.strftime("%Y-%m-%d", time.localtime(keep)),
+                },
+            )
+
+        # forget index entries for files that no longer exist.
+        names = {item.name for item in self.cache_path.iterdir()}
+        for name in [n for n in self._load_index() if n not in names]:
+            self._load_index().pop(name)
+        self._save_index()
+
+        log.info(
+            "Cache sweep removed %(count)d files (%(size)s), cache is now %(now)s of %(limit)s.",
+            {
+                "count": removed_count,
+                "size": format_size_from_bytes(removed_size),
+                "now": format_size_from_bytes(total),
+                "limit": format_size_from_bytes(limit),
+            },
+        )
+        self.scan_audio_cache()
+        return True
+
     def _process_cache_delete(self) -> bool:
         """
         Sorts cache by access or creation time and deletes any that are older than set limits.
@@ -215,6 +367,10 @@ class AudioFileCache:
         if self.config.storage_limit_bytes == 0 and self.config.storage_limit_days == 0:
             log.debug("Audio cache has no limits set, nothing to delete.")
             return False
+
+        # Smakbot: a size limit uses the weighted sweep instead of access times.
+        if self.config.storage_limit_bytes:
+            return self._sweep_by_score()
 
         if os.name == "nt":
             # On Windows, creation time (ctime) is the only reliable way to do this.
