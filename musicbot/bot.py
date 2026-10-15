@@ -4072,6 +4072,83 @@ class MusicBot(discord.Client):
         )
 
     @command_helper(
+        usage=["{cmd} [COUNT]"],
+        desc=_Dd(
+            "Queue the most played songs from the cache, most plays first.\n"
+            "COUNT is how many songs to add, 10 if not given.\n"
+        ),
+    )
+    async def cmd_playtop(
+        self,
+        ssd_: Optional[GuildSpecificData],
+        message: discord.Message,
+        player: MusicPlayer,
+        channel: GuildMessageableChannels,
+        author: discord.Member,
+        count: str = "10",
+    ) -> CommandResponse:
+        """
+        Queue the most played cached songs, straight from disk.
+        """
+        try:
+            amount = int(count)
+        except ValueError as e:
+            raise exceptions.CommandError(
+                "Please give a number of songs, like `%(cmd)s 10`.",
+                fmt_args={"cmd": "playtop"},
+            ) from e
+        if amount < 1:
+            raise exceptions.CommandError("The number of songs must be at least 1.")
+
+        top = self.filecache.most_played(amount)
+        if not top:
+            raise exceptions.CommandError(
+                "No songs have play counts yet. A song counts after 30 seconds of playback.",
+            )
+
+        await self._do_cmd_unpause_check(player, channel, author, message)
+
+        lines = []
+        for num, (path, stats) in enumerate(top, start=1):
+            title = stats.get("title") or self.filecache.title_from_filename(path.name)
+            # Cached files play as local entries: no YouTube lookups needed.
+            info = downloader.YtdlpResponseDict(
+                {
+                    "__input_subject": f"cache://{path.name}",
+                    "__header_data": None,
+                    "__expected_filename": str(path),
+                    "_type": "local",
+                    "extractor": "local:musicbot",
+                    "extractor_key": "LocalMediaMusicBot",
+                    "title": title,
+                    "duration": stats.get("duration"),
+                    "url": f"file://{path.name}",
+                    # YouTube files carry their video ID, so the cover image is predictable.
+                    "thumbnail": (
+                        f"https://i.ytimg.com/vi/{path.name[8:19]}/hqdefault.jpg"
+                        if path.name.startswith("youtube-")
+                        else ""
+                    ),
+                }
+            )
+            await player.playlist.add_entry_from_info(
+                info, channel=channel, author=author, defer_serialize=True
+            )
+            lines.append(f"{num}. {title} ({int(stats['plays'])} plays)")
+
+        await self.serialize_queue(player.voice_client.channel.guild)
+        if player.is_stopped:
+            player.play()
+
+        reply = _D("Queued the top %(num)d most played songs:", ssd_) % {
+            "num": len(top)
+        }
+        listing = "\n".join(lines)
+        if len(listing) > 1800:
+            listing = listing[:1800].rsplit("\n", 1)[0] + "\n..."
+        return Response(f"{reply}\n{listing}")
+
+    @command_helper(
         usage=["{cmd}"],
         desc=_Dd(
             "Play the last song again, as the next song in the queue.\n"

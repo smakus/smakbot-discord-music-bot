@@ -297,7 +297,9 @@ class MusicPlayer(EventEmitter, Serializable):
         played = self.session_progress
         duration = entry.duration or 0
         if played >= min(CACHE_MIN_PLAY_SECONDS, duration * 0.9 or CACHE_MIN_PLAY_SECONDS):
-            self.bot.filecache.record_play(entry.filename)
+            self.bot.filecache.record_play(
+                entry.filename, entry.title, entry.url, entry.duration
+            )
 
         if self.repeatsong:
             self.playlist.entries.appendleft(entry)

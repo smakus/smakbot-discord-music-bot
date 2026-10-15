@@ -7,7 +7,7 @@ import os
 import pathlib
 import shutil
 import time
-from typing import TYPE_CHECKING, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from . import write_path
 from .constants import (
@@ -137,14 +137,52 @@ class AudioFileCache:
         entry["tp"] = tp_dbtp
         self._save_index()
 
-    def record_play(self, filename: str) -> None:
-        """Count a play of a cached file and mark it as played now."""
+    def record_play(
+        self,
+        filename: str,
+        title: str = "",
+        url: str = "",
+        duration: Optional[float] = None,
+    ) -> None:
+        """
+        Count a play of a cached file and mark it as played now.
+        Song details are kept too, so the file can be queued again from cache.
+        """
         if not filename or not (self.cache_path / pathlib.Path(filename).name).is_file():
             return
         entry = self._index_entry(filename)
         entry["plays"] = int(entry["plays"]) + 1
         entry["last_played"] = time.time()
+        if title:
+            entry["title"] = title
+        if url and not url.startswith("file://"):
+            entry["url"] = url
+        if duration:
+            entry["duration"] = duration
         self._save_index()
+
+    def most_played(self, count: int) -> List[Tuple[pathlib.Path, Dict[str, Any]]]:
+        """
+        Cached files that have been played, most plays first (ties: most
+        recently played first), limited to `count`.
+        """
+        played = []
+        for name, entry in self._load_index().items():
+            path = self.cache_path / name
+            if int(entry.get("plays", 0)) > 0 and path.is_file():
+                played.append((path, entry))
+        played.sort(key=lambda p: (-int(p[1]["plays"]), -float(p[1]["last_played"])))
+        return played[:count]
+
+    @staticmethod
+    def title_from_filename(filename: str) -> str:
+        """Best-effort song title from a cache filename like youtube-<id>-<title>-NA.ext"""
+        stem = pathlib.Path(filename).stem
+        if stem.startswith("youtube-") and len(stem) > 20:
+            stem = stem[20:]
+        if stem.endswith("-NA"):
+            stem = stem[:-3]
+        return stem.replace("_", " ").strip() or pathlib.Path(filename).name
 
     def keep_until(self, filename: str) -> float:
         """
