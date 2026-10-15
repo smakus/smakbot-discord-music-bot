@@ -1,0 +1,25 @@
+# Runtime
+audio_cache/
+musicbot_cache/
+bin/
+data/
+logs/
+musicbot/__pycache__/
+musicbot/lib/__pycache__/
+
+# Docker
+.dockerignore
+Dockerfile
+
+# Git
+.git/
+.gitattributes
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+# Secrets / local files
+.env
+.DS_Store
+**/.DS_Store

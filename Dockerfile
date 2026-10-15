@@ -34,8 +34,6 @@ RUN mkdir -p /root/bgutil-ytdlp-pot-provider \
   && unzip /tmp/bgutil.zip -d /root/bgutil-ytdlp-pot-provider \
   && rm /tmp/bgutil.zip
 
-# Force yt-dlp to use a client combo that reliably avoids SABR-only 403s
-RUN sed -i '/ytdl_format_options\["http_headers"\] = self.http_req_headers/a\        ytdl_format_options["extractor_args"] = {"youtube": {"player_client": ["android", "ios", "web_safari"]}}' /musicbot/musicbot/downloader.py
 # Create volumes for audio cache, config, data and logs
 VOLUME ["/musicbot/audio_cache", "/musicbot/config", "/musicbot/data", "/musicbot/logs"]
 
