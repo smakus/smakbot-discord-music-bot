@@ -143,6 +143,8 @@ class MusicPlayer(EventEmitter, Serializable):
         self._current_entry: Optional[EntryTypes] = None
         # Smakbot: the most recent entry that finished or was skipped, for !replay.
         self.last_entry: Optional[EntryTypes] = None
+        # Smakbot: whether the current playback was already counted as a play.
+        self._play_counted: bool = False
         self._stderr_future: Optional[AsyncFuture] = None
 
         self._source: Optional[SourcePlaybackCounter] = None
@@ -203,6 +205,7 @@ class MusicPlayer(EventEmitter, Serializable):
         log.noise(  # type: ignore[attr-defined]
             "MusicPlayer.stop() is called:  %s", repr(self)
         )
+        self._count_play()
         self.state = MusicPlayerState.STOPPED
         self._kill_current_player()
 
@@ -256,6 +259,24 @@ class MusicPlayer(EventEmitter, Serializable):
 
         raise ValueError(f"Cannot pause a MusicPlayer in state {self.state}")
 
+    def _count_play(self) -> None:
+        """
+        Smakbot: count the current playback as a play once enough was heard
+        (CACHE_MIN_PLAY_SECONDS, or 90% of a shorter song). Runs from every
+        path that ends playback - finishing, skipping, stopping, disconnecting -
+        and counts each playback at most once.
+        """
+        entry = self._current_entry
+        if entry is None or self._play_counted or not self._source:
+            return
+        played = self.session_progress
+        duration = entry.duration or 0
+        if played >= min(CACHE_MIN_PLAY_SECONDS, duration * 0.9 or CACHE_MIN_PLAY_SECONDS):
+            self._play_counted = True
+            self.bot.filecache.record_play(
+                entry.filename, entry.title, entry.url, entry.duration
+            )
+
     def kill(self) -> None:
         """
         Set the state of the bot to Dead, clear all events and playlists,
@@ -264,6 +285,7 @@ class MusicPlayer(EventEmitter, Serializable):
         log.noise(  # type: ignore[attr-defined]
             "MusicPlayer.kill() is called:  %s", repr(self)
         )
+        self._count_play()
         self.state = MusicPlayerState.DEAD
         self.playlist.clear()
         self._events.clear()
@@ -293,13 +315,7 @@ class MusicPlayer(EventEmitter, Serializable):
 
         self.last_entry = entry
 
-        # Smakbot: count the play for the cache sweep once enough was heard.
-        played = self.session_progress
-        duration = entry.duration or 0
-        if played >= min(CACHE_MIN_PLAY_SECONDS, duration * 0.9 or CACHE_MIN_PLAY_SECONDS):
-            self.bot.filecache.record_play(
-                entry.filename, entry.title, entry.url, entry.duration
-            )
+        self._count_play()
 
         if self.repeatsong:
             self.playlist.entries.appendleft(entry)
@@ -511,6 +527,7 @@ class MusicPlayer(EventEmitter, Serializable):
                 # I need to add ytdl hooks
                 self.state = MusicPlayerState.PLAYING
                 self._current_entry = entry
+                self._play_counted = False
 
                 self._stderr_future = asyncio.Future()
 
