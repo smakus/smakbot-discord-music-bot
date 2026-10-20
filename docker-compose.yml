@@ -9,6 +9,10 @@ services:
         volumes:
             - ./config:/musicbot/config
             - ./musicbot_cache:/musicbot/audio_cache
+        # /now-playing (StatusApiPort) for Luna. 127.0.0.1 only: it has no
+        # authentication. Other containers reach it at host.docker.internal:8896.
+        ports:
+            - "127.0.0.1:8896:8896"
 
     bgutil-provider:
         image: brainicism/bgutil-ytdlp-pot-provider
