@@ -75,6 +75,7 @@ from .logs import muffle_discord_console_log, mute_discord_console_log
 from .opus_loader import load_opus_lib
 from .permissions import PermissionGroup, Permissions, PermissionsDefaults
 from .player import MusicPlayer
+from .status_api import start_status_api
 from .playlist import Playlist
 from .spotify import Spotify
 from .utils import (
@@ -198,6 +199,8 @@ class MusicBot(discord.Client):
         self.cached_app_info: Optional[discord.AppInfo] = None
         self.last_status: Optional[discord.BaseActivity] = None
         self.players: Dict[int, MusicPlayer] = {}
+        # Smakbot: the /now-playing endpoint (StatusApiPort), once started.
+        self.status_api: Optional[Any] = None
         self.task_pool: Set[AsyncTask] = set()
 
         try:
@@ -2255,6 +2258,9 @@ class MusicBot(discord.Client):
         await self.update_now_playing_status(set_offline=True)
 
         self.logout_called = True
+        if self.status_api is not None:
+            await self.status_api.cleanup()
+            self.status_api = None
         await self.disconnect_all_voice_clients()
         return await super().close()
 
@@ -2320,6 +2326,12 @@ class MusicBot(discord.Client):
         # Start the environment checks. Generate folders/files dependent on Discord data.
         # Also takes care of app-info and auto OwnerID updates.
         await self._on_ready_sanity_checks()
+
+        if self.config.status_api_port and self.status_api is None:
+            try:
+                self.status_api = await start_status_api(self, self.config.status_api_port)
+            except OSError as e:
+                log.error("Status API could not start on port %s: %s", self.config.status_api_port, e)
 
         log.info(
             "MusicBot:  %(id)s/%(name)s#%(desc)s",

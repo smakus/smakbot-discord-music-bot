@@ -796,6 +796,17 @@ class Config:
                 "If SaveVideos is enabled, set a limit on how much storage space should be used."
             ),
         )
+        self.status_api_port: int = self.register.init_option(
+            section="MusicBot",
+            option="StatusApiPort",
+            dest="status_api_port",
+            default=ConfigDefaults.status_api_port,
+            getter="getint",
+            comment=_Dd(
+                "Serve what is playing as JSON at http://<host>:<port>/now-playing, for other bots.\n"
+                "There is no authentication: publish the port on 127.0.0.1 only. Set to 0 to disable."
+            ),
+        )
         self.storage_limit_days: int = self.register.init_option(
             section="MusicBot",
             option="StorageLimitDays",
@@ -1569,6 +1580,7 @@ class ConfigDefaults:
     save_videos: bool = True
     storage_retain_autoplay: bool = True
     storage_limit_bytes: int = 0
+    status_api_port: int = 0
     storage_limit_days: int = 0
     now_playing_mentions: bool = False
     auto_summon: bool = True

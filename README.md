@@ -11,6 +11,7 @@ Differences from upstream:
 - `!replay` (alias `!again`) plays the last finished or skipped song again, as the next song.
 - `!playtop [COUNT]` (aliases `!top`, `!mostplayed`) queues the most played cached songs, 10 by default, straight from disk.
 - Search memory (`SearchMemoryDays = 30`): repeating a YouTube search plays the same cached song without asking YouTube. `!fresh <search>` forces a new search and replaces the remembered result.
+- Now playing API (`StatusApiPort = 8896`): `GET /now-playing` answers JSON with the current song (title, artist when known, link, who asked, elapsed/duration, paused) and the next few in the queue, for Luna. `docker-compose.yml` publishes it on `127.0.0.1` only, since it has no authentication.
 - Settings that differ from upstream's examples:
   - `config/options.ini`:
     - A single skip vote skips a song (`SkipsRequired = 1`, `SkipRatio = 0`).
