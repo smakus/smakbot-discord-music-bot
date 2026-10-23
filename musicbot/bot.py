@@ -1645,11 +1645,27 @@ class MusicBot(discord.Client):
                     format_song_duration(player.current_entry.duration_td),
                 )
                 msg = msg.replace("{p0_url}", player.current_entry.url)
+                msg = msg.replace("{p0_author}", entry_author_name(player.current_entry))
             else:
                 msg = msg.replace("{p0_title}", "")
                 msg = msg.replace("{p0_length}", "")
                 msg = msg.replace("{p0_url}", "")
+                msg = msg.replace("{p0_author}", "")
             return msg
+
+        # Smakbot: who queued the song (credited through Luna's --for), or ''.
+        def entry_author_name(entry: Any) -> str:
+            author = getattr(entry, "author", None)
+            return author.display_name if author is not None else ""
+
+        # Smakbot: the default status, "<title> · <who queued it>".
+        def default_status(entry: Any) -> str:
+            title = entry.title.strip()
+            who = entry_author_name(entry)
+            if not who:
+                return title[:128]
+            suffix = f" · {who}"
+            return title[: 128 - len(suffix)] + suffix
 
         # multiple servers are playing or paused.
         if total > 1:
@@ -1678,7 +1694,7 @@ class MusicBot(discord.Client):
                     player = p
                     break
             if player and player.current_entry:
-                text = player.current_entry.title.strip()[:128]
+                text = default_status(player.current_entry)
                 if self.config.status_message:
                     text = format_status_msg(player)
 
@@ -1696,7 +1712,7 @@ class MusicBot(discord.Client):
                     player = p
                     break
             if player and player.current_entry:
-                text = player.current_entry.title.strip()[:128]
+                text = default_status(player.current_entry)
                 if self.config.status_message:
                     text = format_status_msg(player)
 
