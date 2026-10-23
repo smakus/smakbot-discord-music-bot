@@ -18,6 +18,7 @@ from .constants import (
     LOUDNESS_MAX_TRUE_PEAK,
 )
 from .constructs import Serializable
+from .credit import credited
 from .downloader import YtdlpResponseDict
 from .exceptions import ExtractionError, InvalidDataError, MusicbotException
 from .i18n import _X
@@ -353,7 +354,7 @@ class URLPlaylistEntry(BasePlaylistEntry):
                 self.title,
             )
 
-        self.author: Optional[discord.Member] = author
+        self.author: Optional[discord.Member] = credited(author)
         self.channel: Optional[GuildMessageableChannels] = channel
 
     @property
@@ -903,7 +904,7 @@ class StreamPlaylistEntry(BasePlaylistEntry):
         self.playlist: Playlist = playlist
         self.info: YtdlpResponseDict = info
 
-        self.author: Optional[discord.Member] = author
+        self.author: Optional[discord.Member] = credited(author)
         self.channel: Optional[GuildMessageableChannels] = channel
 
         self.filename: str = self.url
@@ -1095,7 +1096,7 @@ class LocalFilePlaylistEntry(BasePlaylistEntry):
 
         # TODO: maybe it is worth getting duration as early as possible...
 
-        self.author: Optional[discord.Member] = author
+        self.author: Optional[discord.Member] = credited(author)
         self.channel: Optional[GuildMessageableChannels] = channel
 
         self._aopt_eq: str = ""
