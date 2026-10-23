@@ -68,6 +68,7 @@ from .constants import (
     VOICE_CLIENT_RECONNECT_TIMEOUT,
 )
 from .constructs import ErrorResponse, GuildSpecificData, MusicBotResponse, Response
+from .credit import credit_for
 from .entry import LocalFilePlaylistEntry, StreamPlaylistEntry, URLPlaylistEntry
 from .filecache import AudioFileCache
 from .i18n import _D, _L, _Dd
@@ -1644,11 +1645,27 @@ class MusicBot(discord.Client):
                     format_song_duration(player.current_entry.duration_td),
                 )
                 msg = msg.replace("{p0_url}", player.current_entry.url)
+                msg = msg.replace("{p0_author}", entry_author_name(player.current_entry))
             else:
                 msg = msg.replace("{p0_title}", "")
                 msg = msg.replace("{p0_length}", "")
                 msg = msg.replace("{p0_url}", "")
+                msg = msg.replace("{p0_author}", "")
             return msg
+
+        # Smakbot: who queued the song (credited through Luna's --for), or ''.
+        def entry_author_name(entry: Any) -> str:
+            author = getattr(entry, "author", None)
+            return author.display_name if author is not None else ""
+
+        # Smakbot: the default status, "<title> · <who queued it>".
+        def default_status(entry: Any) -> str:
+            title = entry.title.strip()
+            who = entry_author_name(entry)
+            if not who:
+                return title[:128]
+            suffix = f" · {who}"
+            return title[: 128 - len(suffix)] + suffix
 
         # multiple servers are playing or paused.
         if total > 1:
@@ -1677,7 +1694,7 @@ class MusicBot(discord.Client):
                     player = p
                     break
             if player and player.current_entry:
-                text = player.current_entry.title.strip()[:128]
+                text = default_status(player.current_entry)
                 if self.config.status_message:
                     text = format_status_msg(player)
 
@@ -1695,7 +1712,7 @@ class MusicBot(discord.Client):
                     player = p
                     break
             if player and player.current_entry:
-                text = player.current_entry.title.strip()[:128]
+                text = default_status(player.current_entry)
                 if self.config.status_message:
                     text = format_status_msg(player)
 
@@ -8476,6 +8493,19 @@ class MusicBot(discord.Client):
         ):
             log.warning("Ignoring command from other bot (%s)", message.content)
             return
+
+        # Smakbot: a bot allowed to send commands (BotExceptionIDs, i.e. Luna)
+        # may end one with "--for=<@user id>" (a mention, which Discord shows
+        # as @name; Luna sends it without pinging) or "--for=<user id>": songs
+        # it queues are credited to that member (see credit.py). Credit only —
+        # it still runs as the bot. From anyone else the suffix is not special.
+        if message.author.bot and message.guild is not None:
+            on_behalf = re.search(r"\s--for=(?:<@!?(\d{5,25})>|(\d{5,25}))\s*$", message_content)
+            if on_behalf:
+                message_content = message_content[: on_behalf.start()].rstrip()
+                member = message.guild.get_member(int(on_behalf.group(1) or on_behalf.group(2)))
+                if member is not None:
+                    credit_for.set(member)
 
         # ignore any channel type we can't respond to. Also type checking.
         if (not isinstance(message.channel, discord.abc.GuildChannel)) and (

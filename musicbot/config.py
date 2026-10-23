@@ -856,7 +856,9 @@ class Config:
                 "These variables may not be accurate in multi-guild bots:\n"
                 " {p0_length}   = The total duration of the track, if available. Ex: [2:34]\n"
                 " {p0_title}    = The track title for the currently playing track.\n"
-                " {p0_url}      = The track URL for the currently playing track."
+                " {p0_url}      = The track URL for the currently playing track.\n"
+                " {p0_author}   = Who queued the track (Smakbot: credited through Luna's --for).\n"
+                "Left empty, the status is the track title and who queued it."
             ),
         )
         self.status_include_paused: bool = self.register.init_option(
