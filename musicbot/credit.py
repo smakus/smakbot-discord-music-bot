@@ -3,9 +3,10 @@ Smakbot: crediting a song to the person a trusted bot asked for it on behalf of.
 
 Luna (a bot listed in BotExceptionIDs) relays people's voice requests as text
 commands, so every song she queues was "added by Luna". She can end a command
-with "--for=<user id>"; while that command runs, songs it queues are credited
-to that member ("added by", /now-playing, round-robin order). Credit only: the
-command still runs as Luna, with Luna's permissions.
+with "--for=<@user id>" (a mention, shown as @name) or "--for=<user id>";
+while that command runs, songs it queues are credited to that member ("added
+by", /now-playing, round-robin order). Credit only: the command still runs as
+Luna, with Luna's permissions.
 """
 
 from contextvars import ContextVar

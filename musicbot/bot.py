@@ -8495,14 +8495,15 @@ class MusicBot(discord.Client):
             return
 
         # Smakbot: a bot allowed to send commands (BotExceptionIDs, i.e. Luna)
-        # may end one with "--for=<user id>": songs it queues are credited to
-        # that member (see credit.py). Credit only — it still runs as the bot.
-        # From anyone else the suffix is not special.
+        # may end one with "--for=<@user id>" (a mention, which Discord shows
+        # as @name; Luna sends it without pinging) or "--for=<user id>": songs
+        # it queues are credited to that member (see credit.py). Credit only —
+        # it still runs as the bot. From anyone else the suffix is not special.
         if message.author.bot and message.guild is not None:
-            on_behalf = re.search(r"\s--for=(\d{5,25})\s*$", message_content)
+            on_behalf = re.search(r"\s--for=(?:<@!?(\d{5,25})>|(\d{5,25}))\s*$", message_content)
             if on_behalf:
                 message_content = message_content[: on_behalf.start()].rstrip()
-                member = message.guild.get_member(int(on_behalf.group(1)))
+                member = message.guild.get_member(int(on_behalf.group(1) or on_behalf.group(2)))
                 if member is not None:
                     credit_for.set(member)
 
