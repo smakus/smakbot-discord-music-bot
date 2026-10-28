@@ -11,12 +11,21 @@ Answers JSON for that guild's player (or the first one, without ?guild):
      "elapsed": 73.2, "duration": 212.0, "voice_channel": "...",
      "up_next": ["...", "..."]}
 
-or {"playing": false} when nothing is. Enabled with StatusApiPort (0 = off).
+or {"playing": false} when nothing is.
+
+    GET /top-songs[?count=<n>]
+
+The most played songs in the audio cache, the same list !playtop queues
+(count 1-50, default 10):
+
+    {"songs": [{"title": "...", "plays": 13}, ...]}
+
+Enabled with StatusApiPort (0 = off).
 There is no authentication: publish the port on 127.0.0.1 only.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from aiohttp import web
 
@@ -27,6 +36,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 UP_NEXT_MAX = 5
+TOP_SONGS_MAX = 50
 
 
 def _info(entry: Any, key: str) -> Optional[str]:
@@ -65,8 +75,19 @@ def describe_player(player: "MusicPlayer") -> Dict[str, Any]:
     }
 
 
+def top_songs(bot: "MusicBot", count: int) -> List[Dict[str, Any]]:
+    """The `count` most played cached songs, titles and play counts."""
+    return [
+        {
+            "title": stats.get("title") or bot.filecache.title_from_filename(path.name),
+            "plays": int(stats.get("plays", 0)),
+        }
+        for path, stats in bot.filecache.most_played(count)
+    ]
+
+
 async def start_status_api(bot: "MusicBot", port: int) -> web.AppRunner:
-    """Serve /now-playing on 0.0.0.0:port (inside the container)."""
+    """Serve /now-playing and /top-songs on 0.0.0.0:port (inside the container)."""
 
     async def now_playing(request: web.Request) -> web.Response:
         guild_id = request.query.get("guild")
@@ -77,10 +98,19 @@ async def start_status_api(bot: "MusicBot", port: int) -> web.AppRunner:
             player = next(iter(bot.players.values()))
         return web.json_response(describe_player(player) if player else {"playing": False})
 
+    async def top(request: web.Request) -> web.Response:
+        try:
+            count = int(request.query.get("count", "10"))
+        except ValueError:
+            count = 10
+        count = max(1, min(count, TOP_SONGS_MAX))
+        return web.json_response({"songs": top_songs(bot, count)})
+
     app = web.Application()
     app.router.add_get("/now-playing", now_playing)
+    app.router.add_get("/top-songs", top)
     runner = web.AppRunner(app, access_log=None)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", port).start()
-    log.info("Status API: now playing at http://0.0.0.0:%s/now-playing", port)
+    log.info("Status API: http://0.0.0.0:%s/now-playing and /top-songs", port)
     return runner
