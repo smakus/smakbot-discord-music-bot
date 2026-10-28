@@ -85,6 +85,7 @@ What each person may do is set in `config/permissions.ini`. By default everyone 
 | "Hey Luna, stop the music" | `!stop` (smakbot stops and leaves) |
 | "Hey Luna, put on something chill" | Her LLM picks a search and sends `!play …` |
 | "Hey Luna, what song is this?" | Nothing: she asks smakbot's [now playing API](#now-playing-api) and answers out loud |
+| "Hey Luna, what are our top songs?" | Nothing: she reads the most played list from `/top-songs` without playing it |
 
 What happens between the two bots:
 
@@ -167,7 +168,15 @@ With `StatusApiPort` set, smakbot answers `GET http://localhost:8896/now-playing
 }
 ```
 
-When nothing is playing, it answers `{"playing": false}`. `artist` and `track` appear when YouTube provides them. The endpoint is read-only and has no password, so `docker-compose.yml` publishes it on `127.0.0.1` only. Other containers on the same machine reach it at `host.docker.internal:8896`.
+When nothing is playing, it answers `{"playing": false}`. `artist` and `track` appear when YouTube provides them.
+
+`GET http://localhost:8896/top-songs?count=5` lists the most played songs, the same list `!playtop` queues (`count` 1–50, default 10):
+
+```json
+{"songs": [{"title": "Shock My Dog I Can't Stop", "plays": 9}, {"title": "Peter Gabriel - Shock The Monkey", "plays": 3}]}
+```
+
+Both endpoints are read-only and have no password, so `docker-compose.yml` publishes the port on `127.0.0.1` only. Other containers on the same machine reach it at `host.docker.internal:8896`.
 
 ## Pulling in upstream fixes
 
