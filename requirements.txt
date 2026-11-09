@@ -1,5 +1,8 @@
 pynacl
 discord.py [voice] == 2.7.1
+# Smakbot: davey 0.2.0 (2026-11-02) makes voice audio inaudible with discord.py 2.7.1:
+# the speaking ring shows but listeners hear nothing. Keep 0.1.7 until that's fixed.
+davey == 0.1.7
 #discord.py [voice] @ git+https://github.com/Rapptz/discord.py
 pip
 yt-dlp[default]
