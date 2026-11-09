@@ -144,7 +144,7 @@ Settings live in `config/options.ini` and `config/permissions.ini`; [MusicBot's 
 | `SkipsRequired` / `SkipRatio` | `1` / `0` | One `!skip` is enough |
 | `PersistentQueue` | `no` | The queue isn't kept across restarts |
 | `UseAutoPlaylist` | `no` | No background playlist. If you turn it on, a song someone asks for interrupts the autoplaylist song (`AutoPlaylistAutoSkip = yes`) |
-| `LeaveInactiveVCTimeOut` | `0:00:20` | Leaves an empty voice channel after 20 seconds |
+| `LeaveInactiveVC` / `LeaveInactiveVCTimeOut` | `yes` / `0:00:20` | Leaves the voice channel 20 seconds after the last listener leaves (Luna counts as a listener). Anyone joining cancels it. The queue is lost when it leaves |
 | `MaxSongLength` (`permissions.ini`) | `0` | No song length limit for regular users |
 
 ## Now playing API
