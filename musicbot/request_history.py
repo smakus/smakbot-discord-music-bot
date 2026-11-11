@@ -126,6 +126,24 @@ class RequestHistory:
             for s in songs[:count]
         ]
 
+    def top_requesters(self, count: int) -> List[Dict[str, Any]]:
+        """Who asked for the most songs, most first, with each one's top song."""
+        ranked = []
+        for uid, user in self._load().items():
+            total = sum(int(s.get("count", 0)) for s in user.get("songs", {}).values())
+            if total and uid.isdigit():
+                top = self.top(int(uid), 1)
+                ranked.append(
+                    {
+                        "user": user.get("name") or user.get("username") or uid,
+                        "requests": total,
+                        "songs": len(user.get("songs", {})),
+                        "top_song": top[0]["title"] if top else None,
+                    }
+                )
+        ranked.sort(key=lambda r: (-r["requests"], r["user"].lower()))
+        return ranked[:count]
+
     def find_user(
         self, said: str, members: Iterable[Tuple[int, Iterable[str]]] = ()
     ) -> Tuple[Optional[int], List[str]]:

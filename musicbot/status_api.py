@@ -31,6 +31,15 @@ or, when the name doesn't pick out one person,
 {"user": null, "matches": ["closest", "names"]} (empty: nobody like that).
 A known person who hasn't asked for anything yet gets "songs": [].
 
+    GET /top-requesters[?count=<n>]
+
+Who asks for the most songs (count 1-50, default 10), most first:
+
+    {"requesters": [{"user": "smakus", "requests": 248, "songs": 192,
+                     "top_song": "..."}, ...]}
+
+("songs": how many different songs they asked for.)
+
 Enabled with StatusApiPort (0 = off).
 There is no authentication: publish the port on 127.0.0.1 only.
 """
@@ -125,7 +134,7 @@ def user_top_songs(
 
 
 async def start_status_api(bot: "MusicBot", port: int) -> web.AppRunner:
-    """Serve /now-playing and /top-songs on 0.0.0.0:port (inside the container)."""
+    """Serve /now-playing, /top-songs and /top-requesters on 0.0.0.0:port (inside the container)."""
 
     async def now_playing(request: web.Request) -> web.Response:
         guild_id = request.query.get("guild")
@@ -149,11 +158,20 @@ async def start_status_api(bot: "MusicBot", port: int) -> web.AppRunner:
             )
         return web.json_response({"songs": top_songs(bot, count)})
 
+    async def requesters(request: web.Request) -> web.Response:
+        try:
+            count = int(request.query.get("count", "10"))
+        except ValueError:
+            count = 10
+        count = max(1, min(count, TOP_SONGS_MAX))
+        return web.json_response({"requesters": bot.request_history.top_requesters(count)})
+
     app = web.Application()
     app.router.add_get("/now-playing", now_playing)
     app.router.add_get("/top-songs", top)
+    app.router.add_get("/top-requesters", requesters)
     runner = web.AppRunner(app, access_log=None)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", port).start()
-    log.info("Status API: http://0.0.0.0:%s/now-playing and /top-songs", port)
+    log.info("Status API: http://0.0.0.0:%s/now-playing, /top-songs and /top-requesters", port)
     return runner

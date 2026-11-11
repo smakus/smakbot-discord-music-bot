@@ -87,6 +87,7 @@ What each person may do is set in `config/permissions.ini`. By default everyone 
 | "Hey Luna, what song is this?" | Nothing: she asks smakbot's [now playing API](#now-playing-api) and answers out loud |
 | "Hey Luna, what are our top songs?" | Nothing: she reads the most played list from `/top-songs` without playing it |
 | "Hey Luna, what are kenbeans' top songs?" / "what are my top songs?" | Nothing: she reads the songs that person asked for most from `/top-songs?user=` |
+| "Hey Luna, who requests the most songs?" | Nothing: she reads the ranking from `/top-requesters` |
 
 What happens between the two bots:
 
@@ -184,6 +185,12 @@ When nothing is playing, it answers `{"playing": false}`. `artist` and `track` a
 ```
 
 A song counts once for whoever queued it (through Luna, the person she credits), when it's added to the queue. Songs from the auto playlist and `!playtop` don't count. The counts are kept in `config/request_history.json` and start when this was added, so earlier requests aren't in it. A server member who hasn't asked for anything yet gets `"songs": []`. When the name doesn't pick out one person, the answer is `{"user": null, "matches": [...]}` with the closest names, or an empty list if nobody is close.
+
+`GET http://localhost:8896/top-requesters?count=4` ranks the people who ask for the most songs (`count` 1–50, default 10), with how many different songs each asked for and their most requested one:
+
+```json
+{"requesters": [{"user": "smakus", "requests": 248, "songs": 192, "top_song": "One Chain to Rule Them All"}, {"user": "kenbeans", "requests": 116, "songs": 102, "top_song": "..."}]}
+```
 
 All of these are read-only and have no password, so `docker-compose.yml` publishes the port on `127.0.0.1` only. Other containers on the same machine reach it at `host.docker.internal:8896`.
 
