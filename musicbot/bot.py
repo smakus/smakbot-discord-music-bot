@@ -76,6 +76,7 @@ from .logs import muffle_discord_console_log, mute_discord_console_log
 from .opus_loader import load_opus_lib
 from .permissions import PermissionGroup, Permissions, PermissionsDefaults
 from .player import MusicPlayer
+from .request_history import REQUEST_HISTORY_FILE, RequestHistory, not_a_request
 from .status_api import start_status_api
 from .playlist import Playlist
 from .spotify import Spotify
@@ -225,6 +226,10 @@ class MusicBot(discord.Client):
 
         self.aiolocks: DefaultDict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self.filecache = AudioFileCache(self)
+        # Smakbot: who asked for which songs (request_history.py), in the config folder.
+        self.request_history = RequestHistory(
+            self.config.config_file.parent / REQUEST_HISTORY_FILE
+        )
         self.downloader = downloader.Downloader(self)
 
         # Factory function for server specific data objects.
@@ -4196,9 +4201,14 @@ class MusicBot(discord.Client):
                     ),
                 }
             )
-            await player.playlist.add_entry_from_info(
-                info, channel=channel, author=author, defer_serialize=True
-            )
+            # Everyone's favourites, not this person's request (request_history.py).
+            token = not_a_request.set(True)
+            try:
+                await player.playlist.add_entry_from_info(
+                    info, channel=channel, author=author, defer_serialize=True
+                )
+            finally:
+                not_a_request.reset(token)
             lines.append(f"{num}. {title} ({int(stats['plays'])} plays)")
 
         await self.serialize_queue(player.voice_client.channel.guild)

@@ -20,12 +20,23 @@ The most played songs in the audio cache, the same list !playtop queues
 
     {"songs": [{"title": "...", "plays": 13}, ...]}
 
+    GET /top-songs?user=<name, user ID or mention>[&count=<n>]
+
+The songs that person asked for most (request_history.py), whether or not
+they are online. The name may be loose ("smak", "smackus"):
+
+    {"user": "smakus", "songs": [{"title": "...", "requests": 4}, ...]}
+
+or, when the name doesn't pick out one person,
+{"user": null, "matches": ["closest", "names"]} (empty: nobody like that).
+A known person who hasn't asked for anything yet gets "songs": [].
+
 Enabled with StatusApiPort (0 = off).
 There is no authentication: publish the port on 127.0.0.1 only.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from aiohttp import web
 
@@ -86,6 +97,33 @@ def top_songs(bot: "MusicBot", count: int) -> List[Dict[str, Any]]:
     ]
 
 
+def _members(bot: "MusicBot", guild_id: Optional[str]) -> List[Tuple[int, List[str]]]:
+    """(id, names) of the server members, online or not, bots left out."""
+    guilds = bot.guilds
+    if guild_id and guild_id.isdigit():
+        guilds = [g for g in guilds if g.id == int(guild_id)] or guilds
+    members = []
+    for guild in guilds:
+        for m in guild.members:
+            if not m.bot:
+                members.append((m.id, [m.display_name, m.global_name or "", m.name]))
+    return members
+
+
+def user_top_songs(
+    bot: "MusicBot", said: str, count: int, guild_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """The songs the person `said` names asked for most (see the docstring)."""
+    members = _members(bot, guild_id)
+    user_id, matches = bot.request_history.find_user(said, members)
+    if user_id is None:
+        return {"user": None, "matches": matches}
+    name = bot.request_history.name_of(user_id)
+    if name is None:
+        name = next((ns[0] for uid, ns in members if uid == user_id), str(user_id))
+    return {"user": name, "songs": bot.request_history.top(user_id, count)}
+
+
 async def start_status_api(bot: "MusicBot", port: int) -> web.AppRunner:
     """Serve /now-playing and /top-songs on 0.0.0.0:port (inside the container)."""
 
@@ -104,6 +142,11 @@ async def start_status_api(bot: "MusicBot", port: int) -> web.AppRunner:
         except ValueError:
             count = 10
         count = max(1, min(count, TOP_SONGS_MAX))
+        user = request.query.get("user", "").strip()
+        if user:
+            return web.json_response(
+                user_top_songs(bot, user, count, request.query.get("guild"))
+            )
         return web.json_response({"songs": top_songs(bot, count)})
 
     app = web.Application()
