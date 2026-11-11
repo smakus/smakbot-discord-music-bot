@@ -23,6 +23,7 @@ from .constructs import Serializable
 from .entry import LocalFilePlaylistEntry, StreamPlaylistEntry, URLPlaylistEntry
 from .exceptions import ExtractionError, InvalidDataError, WrongEntryTypeError
 from .lib.event_emitter import EventEmitter
+from .request_history import not_a_request
 
 if TYPE_CHECKING:
     from .bot import MusicBot
@@ -440,9 +441,31 @@ class Playlist(EventEmitter, Serializable):
         if self.bot.config.round_robin_queue and not entry.from_auto_playlist:
             self.reorder_for_round_robin()
 
+        self._record_request(entry)
+
         self.emit(
             "entry-added", playlist=self, entry=entry, defer_serialize=defer_serialize
         )
+
+    def _record_request(self, entry: EntryTypes) -> None:
+        """
+        Smakbot: count the song for whoever asked for it (request_history.py).
+        Never stops a song being queued.
+        """
+        author = entry.author
+        if (
+            author is None
+            or author.bot
+            or entry.from_auto_playlist
+            or not_a_request.get()
+        ):
+            return
+        try:
+            self.bot.request_history.record(
+                author.id, author.display_name, author.name, entry.title, entry.url
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            log.warning("Could not record a song request.", exc_info=True)
 
     async def get_next_entry(self) -> Any:
         """

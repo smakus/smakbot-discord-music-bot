@@ -28,3 +28,4 @@ i18n/*/LC_MESSAGES/*.mo
 .env
 musicbot_cache/
 .DS_Store
+config/request_history.json
